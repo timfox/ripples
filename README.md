@@ -1,4 +1,4 @@
-jQuery Ripples Plugin
+Ripples Plugin
 =====================
 
 By the powers of WebGL, add a layer of water to your HTML elements which will ripple by cursor interaction!
@@ -10,7 +10,7 @@ Click [here](http://sirxemic.github.io/jquery.ripples/) for a demo and to see ho
 Usage
 -----
 
-Include the script at the end of your page after including jQuery, or when you are using bundling tools such as Webpack or Browserify, simply import it into your bundle.
+Include the script at the end of your page, or when you are using bundling tools such as Webpack or Browserify, simply import it into your bundle.
 
 The quickest way to use this plugin on an element is to ensure that the element has a `background-image` set (currently only URLs are supported), then initialize the plugin as follows:
 
