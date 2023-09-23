@@ -1,8 +1,3 @@
-import $ from 'jquery'
-
-var gl;
-var $window = $(window); // There is only one window, so why not cache the jQuery-wrapped window?
-
 function isPercentage(str) {
 	return str[str.length - 1] == '%';
 }
@@ -17,69 +12,52 @@ function isPercentage(str) {
  *  - some browsers *do* support rendering to half-floating point textures instead.
  */
 function loadConfig() {
-	var canvas = document.createElement('canvas');
-	gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+	const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
 
-	if (!gl) {
-		// Browser does not support WebGL.
-		return null;
-	}
+    if (!gl) {
+        return null;
+    }
 
 	// Load extensions
-	var extensions = {};
-	[
-		'OES_texture_float',
-		'OES_texture_half_float',
-		'OES_texture_float_linear',
-		'OES_texture_half_float_linear'
-	].forEach(function(name) {
-		var extension = gl.getExtension(name);
-		if (extension) {
-			extensions[name] = extension;
-		}
-	});
+	const extensions = {};
 
-	// If no floating point extensions are supported we can bail out early.
+	['OES_texture_float', 'OES_texture_half_float', 'OES_texture_float_linear', 'OES_texture_half_float_linear'].forEach(name => {
+        const extension = gl.getExtension(name);
+        if (extension) {
+            extensions[name] = extension;
+        }
+    });
+
 	if (!extensions.OES_texture_float) {
 		return null;
 	}
 
 	var configs = [];
 
-	function createConfig(type, glType, arrayType) {
-		var name = 'OES_texture_' + type,
-				nameLinear = name + '_linear',
-				linearSupport = nameLinear in extensions,
-				configExtensions = [name];
+	const createConfig = (type, glType, arrayType) => {
+        const name = `OES_texture_${type}`;
+        const nameLinear = `${name}_linear`;
+        const linearSupport = nameLinear in extensions;
 
-		if (linearSupport) {
-			configExtensions.push(nameLinear);
-		}
+        return {
+            type: glType,
+            arrayType,
+            linearSupport,
+            extensions: [name, ...(linearSupport ? [nameLinear] : [])]
+        };
+    };
 
-		return {
-			type: glType,
-			arrayType: arrayType,
-			linearSupport: linearSupport,
-			extensions: configExtensions
-		};
-	}
+	configs.push(createConfig('float', gl.FLOAT, Float32Array));
 
-	configs.push(
-		createConfig('float', gl.FLOAT, Float32Array)
-	);
 
 	if (extensions.OES_texture_half_float) {
-		configs.push(
-			// Array type should be Uint16Array, but at least on iOS that breaks. In that case we
-			// just initialize the textures with data=null, instead of data=new Uint16Array(...).
-			// This makes initialization a tad slower, but it's still negligible.
-			createConfig('half_float', extensions.OES_texture_half_float.HALF_FLOAT_OES, null)
-		);
-	}
+        configs.push(createConfig('half_float', extensions.OES_texture_half_float.HALF_FLOAT_OES, null));
+    }
 
 	// Setup the texture and framebuffer
-	var texture = gl.createTexture();
-	var framebuffer = gl.createFramebuffer();
+	const texture = gl.createTexture();
+	const framebuffer = gl.createFramebuffer();
 
 	gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 	gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -88,20 +66,19 @@ function loadConfig() {
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-	// Check for each supported texture type if rendering to it is supported
-	var config = null;
+	let config = null;
 
-	for (var i = 0; i < configs.length; i++) {
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 32, 32, 0, gl.RGBA, configs[i].type, null);
+	for (const cfg of configs) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 32, 32, 0, gl.RGBA, cfg.type, null);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
 
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-		if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
-			config = configs[i];
-			break;
-		}
-	}
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
+            config = cfg;
+            break;
+        }
+    }
 
-	return config;
+    return config;
 }
 
 function createImageData(width, height) {
@@ -209,15 +186,43 @@ var config = loadConfig();
 var transparentPixels = createImageData(32, 32);
 
 // Extend the css
-$('head').prepend('<style>.jquery-ripples { position: relative; z-index: 0; }</style>');
+var styleElement = document.createElement('style');
+styleElement.innerHTML = '.ripples { position: relative; z-index: 0; }';
+document.head.prepend(styleElement);
 
 // RIPPLES CLASS DEFINITION
 // =========================
+function ripples(element, option) {
+    if (!config) {
+        throw new Error('Your browser does not support WebGL, the OES_texture_float extension or rendering to floating point textures.');
+    }
+
+    const args = (arguments.length > 1) ? Array.prototype.slice.call(arguments, 1) : undefined;
+  
+    // Check if element is iterable, if not make it an array
+    const iterableElement = Symbol.iterator in Object(element) ? element : [element];
+  
+    for (let el of iterableElement) {
+        let data = el.dataset.ripples;
+        let options = Object.assign({}, Ripples.DEFAULTS, el.dataset, (typeof option == 'object' && option));
+  
+        if (!data && typeof option == 'string') {
+            continue;
+        }
+        if (!data) {
+            el.dataset.ripples = new Ripples(el, options);
+        }
+        else if (typeof option == 'string') {
+            Ripples.prototype[option].apply(data, args);
+        }
+    }
+}
+
 
 var Ripples = function (el, options) {
 	var that = this;
 
-	this.$el = $(el);
+	this.el = el;
 
 	// Init properties from options
 	this.interactive = options.interactive;
@@ -232,20 +237,18 @@ var Ripples = function (el, options) {
 
 	// Init WebGL canvas
 	var canvas = document.createElement('canvas');
-	canvas.width = this.$el.innerWidth();
-	canvas.height = this.$el.innerHeight();
+	canvas.width = window.innerWidth;
+	canvas.height = window.innerHeight;
 	this.canvas = canvas;
-	this.$canvas = $(canvas);
-	this.$canvas.css({
-		position: 'absolute',
-		left: 0,
-		top: 0,
-		right: 0,
-		bottom: 0,
-		zIndex: -1
-	});
+	this.canvas.style.position = 'absolute';
+	this.canvas.style.left = '0';
+	this.canvas.style.top = '0';
+	this.canvas.style.right = '0';
+	this.canvas.style.bottom = '0';
+	this.canvas.style.zIndex = '-1';
 
-	this.$el.addClass('jquery-ripples').append(canvas);
+	//this.el.classList.add('ripples').appendChild(canvas);
+	
 	this.context = gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
 
 	// Load extensions
@@ -255,7 +258,7 @@ var Ripples = function (el, options) {
 
 	// Auto-resize when window size changes.
 	this.updateSize = this.updateSize.bind(this)
-	$(window).on('resize', this.updateSize);
+	window.addEventListener('resize', this.updateSize);
 
 	// Init rendertargets for ripple data.
 	this.textures = [];
@@ -355,25 +358,36 @@ Ripples.prototype = {
 			}
 		}
 
-		// Start listening to pointer events
-		this.$el
+		// Function to handle mousemove event
+		function handleMouseMove(e) {
+			dropAtPointer(e);
+		}
 
-			// Create regular, small ripples for mouse move and touch events...
-			.on('mousemove.ripples', function(e) {
-				dropAtPointer(e);
-			})
-			.on('touchmove.ripples touchstart.ripples', function(e) {
-				var touches = e.originalEvent.changedTouches;
-				for (var i = 0; i < touches.length; i++) {
-					dropAtPointer(touches[i]);
-				}
-			})
+		// Function to handle touch events
+		function handleTouchMove(e) {
+			var touches = e.changedTouches;
+			for (var i = 0; i < touches.length; i++) {
+				dropAtPointer(touches[i]);
+			}
+		}
 
-			// ...and only a big ripple on mouse down events.
-			.on('mousedown.ripples', function(e) {
-				dropAtPointer(e, true);
-			});
-	},
+		// Function to handle mousedown event
+		function handleMouseDown(e) {
+			dropAtPointer(e, true);
+		}
+
+		// Assuming this.el is a DOM element
+		var el = this.el;
+
+		// Attach mousemove event listener
+		el.addEventListener('mousemove', handleMouseMove);
+
+		// Attach touchmove and touchstart event listeners
+		el.addEventListener('touchmove', handleTouchMove);
+		el.addEventListener('touchstart', handleTouchMove);
+
+		// Attach mousedown event listener
+		el.addEventListener('mousedown', handleMouseDown);
 
 	// Load the image either from the options or the element's CSS rules.
 	loadImage: function() {
@@ -383,7 +397,7 @@ Ripples.prototype = {
 
 		var newImageSource = this.imageUrl ||
 			extractUrl(this.originalCssBackgroundImage) ||
-			extractUrl(this.$el.css('backgroundImage'));
+			extractUrl(this.el.style.backgroundImage = 'none');
 
 		// If image source is unchanged, don't reload it.
 		if (newImageSource == this.imageSource) {
@@ -499,22 +513,22 @@ Ripples.prototype = {
 	},
 
 	computeTextureBoundaries: function() {
-		var backgroundSize = this.$el.css('background-size');
-		var backgroundAttachment = this.$el.css('background-attachment');
-		var backgroundPosition = translateBackgroundPosition(this.$el.css('background-position'));
+		var backgroundSize = this.el.css('background-size');
+		var backgroundAttachment = this.el.css('background-attachment');
+		var backgroundPosition = translateBackgroundPosition(this.el.css('background-position'));
 
 		// Here the 'container' is the element which the background adapts to
 		// (either the chrome window or some element, depending on attachment)
 		var container;
 		if (backgroundAttachment == 'fixed') {
 			container = { left: window.pageXOffset, top: window.pageYOffset };
-			container.width = $window.width();
-			container.height = $window.height();
+			container.width = window.width();
+			container.height = window.height();
 		}
 		else {
-			container = this.$el.offset();
-			container.width = this.$el.innerWidth();
-			container.height = this.$el.innerHeight();
+			container = this.el.getBoundingClientRect();
+			container.width = this.el.innerWidth();
+			container.height = this.el.innerHeight();
 		}
 
 		// TODO: background-clip
@@ -582,15 +596,15 @@ Ripples.prototype = {
 			backgroundY = container.top + parseFloat(backgroundY);
 		}
 
-		var elementOffset = this.$el.offset();
+		var elementOffset = this.el.getBoundingClientRect();
 
 		this.renderProgram.uniforms.topLeft = new Float32Array([
 			(elementOffset.left - backgroundX) / backgroundWidth,
 			(elementOffset.top - backgroundY) / backgroundHeight
 		]);
 		this.renderProgram.uniforms.bottomRight = new Float32Array([
-			this.renderProgram.uniforms.topLeft[0] + this.$el.innerWidth() / backgroundWidth,
-			this.renderProgram.uniforms.topLeft[1] + this.$el.innerHeight() / backgroundHeight
+			this.renderProgram.uniforms.topLeft[0] + this.el.innerWidth() / backgroundWidth,
+			this.renderProgram.uniforms.topLeft[1] + this.el.innerHeight() / backgroundHeight
 		]);
 
 		var maxSide = Math.max(this.canvas.width, this.canvas.height);
@@ -720,7 +734,7 @@ Ripples.prototype = {
 	hideCssBackground: function() {
 
 		// Check whether we're changing inline CSS or overriding a global CSS rule.
-		var inlineCss = this.$el[0].style.backgroundImage;
+		var inlineCss = this.el[0].style.backgroundImage;
 
 		if (inlineCss == 'none') {
 			return;
@@ -728,24 +742,24 @@ Ripples.prototype = {
 
 		this.originalInlineCss = inlineCss;
 
-		this.originalCssBackgroundImage = this.$el.css('backgroundImage');
-		this.$el.css('backgroundImage', 'none');
+		this.originalCssBackgroundImage = this.el.css('backgroundImage');
+		this.el.style.backgroundImage = 'none';
 	},
 
 	restoreCssBackground: function() {
 
 		// Restore background by either changing the inline CSS rule to what it was, or
 		// simply remove the inline CSS rule if it never was inlined.
-		this.$el.css('backgroundImage', this.originalInlineCss || '');
+		this.el.css('backgroundImage', this.originalInlineCss || '');
 	},
 
 	dropAtPointer: function(pointer, radius, strength) {
-		var borderLeft = parseInt(this.$el.css('border-left-width')) || 0,
-				borderTop = parseInt(this.$el.css('border-top-width')) || 0;
+		var borderLeft = parseInt(this.el.css('border-left-width')) || 0,
+				borderTop = parseInt(this.el.css('border-top-width')) || 0;
 
 		this.drop(
-			pointer.pageX - this.$el.offset().left - borderLeft,
-			pointer.pageY - this.$el.offset().top - borderTop,
+			pointer.pageX - this.el.getBoundingClientRect().left - borderLeft,
+			pointer.pageY - this.el.getBoundingClientRect().top - borderTop,
 			radius,
 			strength
 		);
@@ -757,8 +771,8 @@ Ripples.prototype = {
 	drop: function(x, y, radius, strength) {
 		gl = this.context;
 
-		var elWidth = this.$el.innerWidth();
-		var elHeight = this.$el.innerHeight();
+		var elWidth = this.el.innerWidth();
+		var elHeight = this.el.innerHeight();
 		var longestSide = Math.max(elWidth, elHeight);
 
 		radius = radius / longestSide;
@@ -784,8 +798,8 @@ Ripples.prototype = {
 	},
 
 	updateSize: function() {
-		var newWidth = this.$el.innerWidth(),
-				newHeight = this.$el.innerHeight();
+		var newWidth = this.el.innerWidth(),
+				newHeight = this.el.innerHeight();
 
 		if (newWidth != this.canvas.width || newHeight != this.canvas.height) {
 			this.canvas.width = newWidth;
@@ -794,17 +808,17 @@ Ripples.prototype = {
 	},
 
 	destroy: function() {
-		this.$el
+		this.el
 			.off('.ripples')
-			.removeClass('jquery-ripples')
+			.removeClass('ripples')
 			.removeData('ripples');
 
 		// Make sure the last used context is garbage-collected
 		gl = null
 
-		$(window).off('resize', this.updateSize);
+		window.off('resize', this.updateSize);
 
-		this.$canvas.remove();
+		this.canvas.remove();
 		this.restoreCssBackground();
 
 		this.destroyed = true;
@@ -813,14 +827,14 @@ Ripples.prototype = {
 	show: function() {
 		this.visible = true;
 
-		this.$canvas.show();
+		this.canvas.show();
 		this.hideCssBackground();
 	},
 
 	hide: function() {
 		this.visible = false;
 
-		this.$canvas.hide();
+		this.canvas.hide();
 		this.restoreCssBackground();
 	},
 
@@ -851,39 +865,24 @@ Ripples.prototype = {
 // RIPPLES PLUGIN DEFINITION
 // ==========================
 
-var old = $.fn.ripples;
-
-$.fn.ripples = function(option) {
+function applyRipples(elements, option) {
 	if (!config) {
 		throw new Error('Your browser does not support WebGL, the OES_texture_float extension or rendering to floating point textures.');
 	}
 
 	var args = (arguments.length > 1) ? Array.prototype.slice.call(arguments, 1) : undefined;
 
-	return this.each(function() {
-		var $this = $(this),
-				data = $this.data('ripples'),
-				options = $.extend({}, Ripples.DEFAULTS, $this.data(), typeof option == 'object' && option);
+	Array.from(elements).forEach(function(element) {
+				var data = element.dataset.ripples;
+				var options = Object.assign({}, Ripples.DEFAULTS, element.dataset, typeof option === 'object' && option);
 
 		if (!data && typeof option == 'string') {
 			return;
 		}
 		if (!data) {
-			$this.data('ripples', (data = new Ripples(this, options)));
-		}
-		else if (typeof option == 'string') {
+			element.dataset.ripples = new Ripples(element, options);
+		  } else if (typeof option === 'string') {
 			Ripples.prototype[option].apply(data, args);
-		}
+		  }
 	});
-};
-
-$.fn.ripples.Constructor = Ripples;
-
-
-// RIPPLES NO CONFLICT
-// ====================
-
-$.fn.ripples.noConflict = function() {
-	$.fn.ripples = old;
-	return this;
 };

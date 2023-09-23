@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>jQuery WebGL Ripples</title>
+<title>WebGL Ripples</title>
 <style>
 * { margin: 0; padding: 0; }
 html {
@@ -101,7 +101,7 @@ code { font-size: 0.8em; display: inline; }
 
 <main>
 	<header>
-		<h1>jQuery Ripples</h1>
+		<h1>Ripples</h1>
 		<h2>A simple WebGL-based ripple effect.</h2>
 	</header>
 	<p>Background images are often boring. Use this effect to make your static CSS background images more interactive!</p>
@@ -127,7 +127,7 @@ $(<span class="code-string">'body'</span>).ripples(<span class="code-cbracket">{
 	</button>
 	</p>
 
-	<p>Download or fork this effect at <a href="//github.com/sirxemic/jquery.ripples/">Github</a>.</p>
+	<p>Download or fork this effect at <a href="//github.com/timfox/ripples/">Github</a>.</p>
 </main>
 
 <button class="js-ripples-disable disable">
@@ -137,51 +137,58 @@ $(<span class="code-string">'body'</span>).ripples(<span class="code-cbracket">{
 
 <div class="error"></div>
 
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.0.0/jquery.min.js"></script>
-<script src="../dist/jquery.ripples.js"></script>
+<script src="../src/main.js"></script>
+
 <script>
-$(document).ready(function() {
-	try {
-		$('body').ripples({
-			resolution: 512,
-			dropRadius: 20, //px
-			perturbance: 0.04,
-		});
-		$('main').ripples({
-			resolution: 128,
-			dropRadius: 10, //px
-			perturbance: 0.04,
-			interactive: false
-		});
-	}
-	catch (e) {
-		$('.error').show().text(e);
-	}
+document.addEventListener("DOMContentLoaded", function() {
+    try {
+        // Initialize ripples
+        ripples(document.body, {
+            resolution: 512,
+            dropRadius: 20, //px
+            perturbance: 0.04,
+        });
+        
+        /*ripples(document.querySelector('main'), {
+            resolution: 128,
+            dropRadius: 10, //px
+            perturbance: 0.04,
+            interactive: false
+        });*/
+    } catch (e) {
+        document.querySelector('.error').style.display = 'block';
+        document.querySelector('.error').innerText = e;
+    }
 
-	$('.js-ripples-disable').on('click', function() {
-		$('body, main').ripples('destroy');
-		$(this).hide();
-	});
+    document.querySelector('.js-ripples-disable').addEventListener('click', function() {
+        ripples(document.body, 'destroy');
+        ripples(document.querySelector('main'), 'destroy');
+        this.style.display = 'none';
+    });
 
-	$('.js-ripples-play').on('click', function() {
-		$('body, main').ripples('play');
-	});
+    document.querySelector('.js-ripples-play').addEventListener('click', function() {
+        ripples(document.body, 'play');
+        ripples(document.querySelector('main'), 'play');
+    });
 
-	$('.js-ripples-pause').on('click', function() {
-		$('body, main').ripples('pause');
-	});
+    document.querySelector('.js-ripples-pause').addEventListener('click', function() {
+        ripples(document.body, 'pause');
+        ripples(document.querySelector('main'), 'pause');
+    });
 
-	// Automatic drops
-	setInterval(function() {
-		var $el = $('main');
-		var x = Math.random() * $el.outerWidth();
-		var y = Math.random() * $el.outerHeight();
-		var dropRadius = 20;
-		var strength = 0.04 + Math.random() * 0.04;
+    // Automatic drops
+    /*setInterval(function() {
+        const el = document.querySelector('main');
+        const rect = el.getBoundingClientRect();
+        const x = Math.random() * rect.width;
+        const y = Math.random() * rect.height;
+        const dropRadius = 20;
+        const strength = 0.04 + Math.random() * 0.04;
 
-		$el.ripples('drop', x, y, dropRadius, strength);
-	}, 400);
+        ripples(el, 'drop', x, y, dropRadius, strength);
+    }, 400);*/
 });
+
 </script>
 </body>
 </html>
